@@ -5,6 +5,7 @@ import { DeskSpace } from './deskSpace.js'
 import { InteractionManager } from './interactions.js'
 import { RadialMenu } from './radialMenu.js'
 import { ObjectDetectionManager } from './detection.js'
+import { ScreenWindow } from './screenWindow.js'
 import { AppState } from './states.js'
 import { saveWorkspace, loadWorkspace, applyWorkspace } from './persistence.js'
 import {
@@ -73,7 +74,9 @@ export async function startARSession({ store, onState, onEnd }) {
   })
   robot.add(radial.group)
 
-  // Create all cards and register them.
+  // Create the operable AR computer screen + all cards, and register them.
+  const screen = new ScreenWindow(store)
+  desk.addCard(screen)
   ;[
     makeWeatherCard(store),
     makeCalendarCard(store),

@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { createRobot, attachBehavior } from './robot.js'
 import { DeskSpace } from './deskSpace.js'
+import { ScreenWindow } from './screenWindow.js'
 import {
   makeCalendarCard,
   makeTasksCard,
@@ -33,7 +34,7 @@ export function startPreview3D({ store, mount }) {
     0.01,
     50
   )
-  camera.position.set(0, 0.6, 1.1)
+  camera.position.set(0, 0.55, 1.35)
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x334455, 1.2))
   const dir = new THREE.DirectionalLight(0xffffff, 1.0)
@@ -41,7 +42,7 @@ export function startPreview3D({ store, mount }) {
   scene.add(dir)
 
   const controls = new OrbitControls(camera, renderer.domElement)
-  controls.target.set(0, 0.15, 0)
+  controls.target.set(0, 0.22, -0.05)
   controls.enableDamping = true
   controls.maxPolarAngle = Math.PI / 2.05
 
@@ -65,6 +66,8 @@ export function startPreview3D({ store, mount }) {
       desk.addRobot(robot)
     })
 
+  const screen = new ScreenWindow(store)
+  desk.addCard(screen)
   ;[
     makeWeatherCard(store),
     makeCalendarCard(store),

@@ -78,13 +78,15 @@ export class DeskSpace {
     const zFront = this.depth * 0.32
 
     const positions = {
-      weather: [xL, y + 0.14, zBack],
-      calendar: [xC, y + 0.16, zBack],
-      notifications: [xR, y + 0.14, zBack],
-      tasks: [xL, y, zFront],
-      focus: [xC, y - 0.02, zMid],
-      system: [xR, y, zFront],
-      github: [xR, y + 0.14, zMid],
+      // The operable computer screen floats front-center, large and prominent.
+      screen: [xC, y + 0.24, zBack - 0.04],
+      weather: [xL - 0.04, y + 0.16, zBack],
+      calendar: [xL - 0.02, y - 0.02, zFront],
+      notifications: [xR + 0.04, y + 0.16, zBack],
+      tasks: [xL - 0.06, y + 0.02, zMid],
+      focus: [xC, y - 0.02, zFront + 0.02],
+      system: [xR + 0.06, y + 0.02, zMid],
+      github: [xR + 0.04, y - 0.02, zFront],
     }
 
     for (const [id, pos] of Object.entries(positions)) {

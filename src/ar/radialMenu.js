@@ -15,6 +15,7 @@ export class RadialMenu {
     this.anim = 0
 
     this.items = [
+      { id: 'screen', icon: '🖥️' },
       { id: 'calendar', icon: '📅' },
       { id: 'system', icon: '📊' },
       { id: 'notifications', icon: '🔔' },
