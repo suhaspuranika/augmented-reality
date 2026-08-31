@@ -55,10 +55,10 @@ export function startServices(store) {
   every(10000, () => {
     if (Math.random() < 0.25) {
       const pool = [
-        { icon: '🟢', text: 'Build passed', priority: 'low' },
-        { icon: '🟣', text: 'New PR opened', priority: 'normal' },
-        { icon: '🟡', text: 'Meeting soon', priority: 'high' },
-        { icon: '🔴', text: 'Backend latency spike', priority: 'high' },
+        { text: 'Build passed', priority: 'low' },
+        { text: 'New PR opened', priority: 'normal' },
+        { text: 'Meeting soon', priority: 'high' },
+        { text: 'Backend latency spike', priority: 'high' },
       ]
       const pick = pool[Math.floor(Math.random() * pool.length)]
       const list = store.get().notifications.slice(-5)

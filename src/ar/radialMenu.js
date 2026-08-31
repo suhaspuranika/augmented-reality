@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { THEME } from './theme.js'
+import { icon as drawIcon } from './icons.js'
 
 /**
  * RadialMenu — appears around the robot when tapped. Each item is a small
@@ -15,34 +16,31 @@ export class RadialMenu {
     this.anim = 0
 
     this.items = [
-      { id: 'screen', icon: '🖥️' },
-      { id: 'calendar', icon: '📅' },
-      { id: 'system', icon: '📊' },
-      { id: 'notifications', icon: '🔔' },
-      { id: 'focus', icon: '🎯' },
-      { id: 'tasks', icon: '✅' },
-      { id: 'github', icon: '🐙' },
+      { id: 'screen', icon: 'monitor' },
+      { id: 'calendar', icon: 'calendar' },
+      { id: 'system', icon: 'system' },
+      { id: 'notifications', icon: 'bell' },
+      { id: 'focus', icon: 'focus' },
+      { id: 'tasks', icon: 'tasks' },
+      { id: 'github', icon: 'git' },
     ]
 
     this.radius = 0.11
     this._build()
   }
 
-  _iconTexture(icon) {
+  _iconTexture(iconName) {
     const c = document.createElement('canvas')
     c.width = c.height = 128
     const ctx = c.getContext('2d')
     ctx.beginPath()
     ctx.arc(64, 64, 58, 0, Math.PI * 2)
-    ctx.fillStyle = 'rgba(20,26,38,0.9)'
+    ctx.fillStyle = 'rgba(16,21,32,0.92)'
     ctx.fill()
-    ctx.lineWidth = 4
+    ctx.lineWidth = 3
     ctx.strokeStyle = THEME.strokeGlow
     ctx.stroke()
-    ctx.font = '64px system-ui, sans-serif'
-    ctx.textAlign = 'center'
-    ctx.textBaseline = 'middle'
-    ctx.fillText(icon, 64, 70)
+    drawIcon(ctx, iconName, 64, 64, 52, THEME.accent)
     const tex = new THREE.CanvasTexture(c)
     tex.colorSpace = THREE.SRGBColorSpace
     return tex

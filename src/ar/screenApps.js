@@ -1,4 +1,5 @@
 import { THEME, roundRect } from './theme.js'
+import { icon } from './icons.js'
 
 /**
  * Screen "apps" for the AR computer screen. Each app draws into a rectangular
@@ -24,9 +25,10 @@ function text(ctx, s, x, y, color, font) {
 export const NotesApp = {
   id: 'notes',
   title: 'Notes',
-  icon: '📝',
+  icon: 'notes',
   draw(ctx, vp, s, api) {
-    text(ctx, '📝 Notes', vp.x + 24, vp.y + 44, THEME.accent, 'bold 30px system-ui')
+    icon(ctx, 'notes', vp.x + 34, vp.y + 34, 26, THEME.accent)
+    text(ctx, 'Notes', vp.x + 58, vp.y + 44, THEME.accent, 'bold 30px system-ui')
     // text area
     roundRect(ctx, vp.x + 20, vp.y + 64, vp.w - 40, vp.h - 200, 16)
     ctx.fillStyle = 'rgba(255,255,255,0.05)'
@@ -51,10 +53,11 @@ export const NotesApp = {
 // --- Calculator app --------------------------------------------------------
 export const CalcApp = {
   id: 'calc',
-  title: 'Calc',
-  icon: '🧮',
+  title: 'Calculator',
+  icon: 'calc',
   draw(ctx, vp, s, api) {
-    text(ctx, '🧮 Calculator', vp.x + 24, vp.y + 44, THEME.accent, 'bold 30px system-ui')
+    icon(ctx, 'calc', vp.x + 34, vp.y + 34, 26, THEME.accent)
+    text(ctx, 'Calculator', vp.x + 58, vp.y + 44, THEME.accent, 'bold 30px system-ui')
     const disp = s.screen.calcDisplay || '0'
     roundRect(ctx, vp.x + 20, vp.y + 64, vp.w - 40, 70, 14)
     ctx.fillStyle = 'rgba(0,0,0,0.35)'
@@ -100,7 +103,7 @@ export const CalcApp = {
 export const TerminalApp = {
   id: 'terminal',
   title: 'Terminal',
-  icon: '🖥',
+  icon: 'terminal',
   draw(ctx, vp, s, api) {
     roundRect(ctx, vp.x + 16, vp.y + 20, vp.w - 32, vp.h - 40, 14)
     ctx.fillStyle = 'rgba(0,0,0,0.55)'
@@ -125,9 +128,10 @@ export const TerminalApp = {
 export const MediaApp = {
   id: 'media',
   title: 'Player',
-  icon: '🎵',
+  icon: 'media',
   draw(ctx, vp, s, api) {
-    text(ctx, '🎵 Now Playing', vp.x + 24, vp.y + 44, THEME.accent, 'bold 30px system-ui')
+    icon(ctx, 'media', vp.x + 34, vp.y + 34, 24, THEME.accent)
+    text(ctx, 'Now Playing', vp.x + 58, vp.y + 44, THEME.accent, 'bold 30px system-ui')
     text(ctx, s.screen.mediaTrack || 'Focus Beats — Lo-Fi', vp.x + 24, vp.y + 90, THEME.text, '26px system-ui')
     const playing = !!s.screen.mediaPlaying
     // progress
@@ -147,11 +151,20 @@ export const MediaApp = {
     ctx.strokeStyle = THEME.accent
     ctx.lineWidth = 2
     ctx.stroke()
+    const mx = vp.x + vp.w / 2
+    const my = by + 32
     ctx.fillStyle = THEME.accent
-    ctx.font = 'bold 30px system-ui'
-    ctx.textAlign = 'center'
-    ctx.fillText(playing ? '⏸' : '▶', vp.x + vp.w / 2, by + 42)
-    ctx.textAlign = 'left'
+    if (playing) {
+      ctx.fillRect(mx - 12, my - 14, 8, 28)
+      ctx.fillRect(mx + 4, my - 14, 8, 28)
+    } else {
+      ctx.beginPath()
+      ctx.moveTo(mx - 10, my - 15)
+      ctx.lineTo(mx - 10, my + 15)
+      ctx.lineTo(mx + 16, my)
+      ctx.closePath()
+      ctx.fill()
+    }
     api.addHit('mediaToggle', bx, by, 90, 64)
   },
   onTap(region, screen) {

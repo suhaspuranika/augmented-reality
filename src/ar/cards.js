@@ -1,5 +1,6 @@
 import { SpatialCard } from './spatialCard.js'
-import { THEME, drawHeader, drawProgress, divider, roundRect } from './theme.js'
+import { THEME, drawHeader, drawProgress, roundRect } from './theme.js'
+import { statusDot } from './icons.js'
 
 // Shared text helpers -------------------------------------------------------
 
@@ -23,9 +24,9 @@ export function makeCalendarCard(store) {
   return new SpatialCard({
     id: 'calendar',
     title: 'CALENDAR',
-    icon: '📅',
+    icon: 'calendar',
     render(ctx, cw, ch, { expanded, state }) {
-      drawHeader(ctx, '📅', 'CALENDAR', cw)
+      drawHeader(ctx, 'calendar', 'CALENDAR', cw)
       const meetings = state.meetings || []
       const next = meetings[0]
       let y = 130
@@ -54,12 +55,12 @@ export function makeTasksCard(store) {
   return new SpatialCard({
     id: 'tasks',
     title: 'TASKS',
-    icon: '✅',
+    icon: 'tasks',
     expandedRatio: 1.25,
     render(ctx, cw, ch, { expanded, state }, api) {
       const tasks = state.tasks || []
       const done = tasks.filter((t) => t.done).length
-      drawHeader(ctx, '✅', 'TASKS', cw)
+      drawHeader(ctx, 'tasks', 'TASKS', cw)
       ctx.textAlign = 'right'
       ctx.fillStyle = THEME.accent
       ctx.font = THEME.fontBody
@@ -70,12 +71,23 @@ export function makeTasksCard(store) {
       const rows = expanded ? tasks : tasks.slice(0, 3)
       rows.forEach((t) => {
         const boxX = 34
-        const boxY = y - 26
+        const boxY = y - 22
         // interactive checkbox region
-        api.addHit('toggleTask', boxX - 6, boxY - 6, 48, 44, { id: t.id })
-        ctx.font = '30px system-ui, sans-serif'
-        ctx.fillStyle = t.done ? THEME.good : THEME.textDim
-        ctx.fillText(t.done ? '☑' : '☐', boxX, y)
+        api.addHit('toggleTask', boxX - 6, boxY - 8, 48, 44, { id: t.id })
+        // drawn checkbox
+        ctx.lineWidth = 2
+        ctx.strokeStyle = t.done ? THEME.good : THEME.textDim
+        roundRect(ctx, boxX, boxY - 4, 26, 26, 6)
+        ctx.stroke()
+        if (t.done) {
+          ctx.strokeStyle = THEME.good
+          ctx.lineWidth = 3
+          ctx.beginPath()
+          ctx.moveTo(boxX + 5, boxY + 9)
+          ctx.lineTo(boxX + 11, boxY + 16)
+          ctx.lineTo(boxX + 21, boxY + 2)
+          ctx.stroke()
+        }
         ctx.font = THEME.fontSmall
         ctx.fillStyle = t.done ? '#7c8798' : THEME.text
         ctx.fillText(t.text, boxX + 46, y)
@@ -111,10 +123,10 @@ export function makeWeatherCard(store) {
   return new SpatialCard({
     id: 'weather',
     title: 'WEATHER',
-    icon: '⛅',
+    icon: 'weather',
     render(ctx, cw, ch, { expanded, state }) {
       const w = state.weather || {}
-      drawHeader(ctx, w.icon || '⛅', 'WEATHER', cw)
+      drawHeader(ctx, 'weather', 'WEATHER', cw)
       let y = 140
       ctx.fillStyle = THEME.text
       ctx.font = 'bold 68px system-ui, sans-serif'
@@ -140,11 +152,11 @@ export function makeNotificationsCard(store) {
   return new SpatialCard({
     id: 'notifications',
     title: 'ALERTS',
-    icon: '🔔',
+    icon: 'bell',
     render(ctx, cw, ch, { expanded, state }, api) {
       const list = state.notifications || []
       const unread = list.filter((n) => !n.read).length
-      drawHeader(ctx, '🔔', 'ALERTS', cw)
+      drawHeader(ctx, 'bell', 'ALERTS', cw)
       ctx.textAlign = 'right'
       ctx.fillStyle = unread ? THEME.warn : THEME.textDim
       ctx.font = THEME.fontBody
@@ -152,13 +164,16 @@ export function makeNotificationsCard(store) {
       ctx.textAlign = 'left'
 
       let y = 120
+      const priColor = (p) =>
+        p === 'high' ? THEME.bad : p === 'normal' ? THEME.accent2 : THEME.good
       const rows = expanded ? list.slice(0, 6) : list.slice(0, 3)
       rows.forEach((n) => {
         api.addHit('openNotif', 28, y - 28, cw - 56, 40, { id: n.id })
-        ctx.font = '26px system-ui, sans-serif'
-        ctx.fillStyle = THEME.text
-        ctx.fillText(n.icon + '  ' + n.text, 34, y)
+        statusDot(ctx, 44, y - 8, 6, priColor(n.priority))
         ctx.font = THEME.fontSmall
+        ctx.fillStyle = n.read ? '#6b7686' : THEME.text
+        ctx.textAlign = 'left'
+        ctx.fillText(n.text, 62, y)
         ctx.fillStyle = n.read ? '#6b7686' : THEME.accent
         ctx.textAlign = 'right'
         ctx.fillText(n.ts || '', cw - 34, y)
@@ -181,20 +196,16 @@ export function makeSystemCard(store) {
   return new SpatialCard({
     id: 'system',
     title: 'SYSTEM',
-    icon: '🖥',
+    icon: 'system',
     expandedRatio: 1.3,
     render(ctx, cw, ch, { expanded, state }) {
       const s = state.system || { services: {} }
-      drawHeader(ctx, '🖥', 'SYSTEM', cw)
+      drawHeader(ctx, 'system', 'SYSTEM', cw)
       let y = 120
       Object.entries(s.services).forEach(([name, status]) => {
         const online = status === 'Online'
         text(ctx, name, 34, y, THEME.text, THEME.fontSmall)
-        ctx.textAlign = 'right'
-        ctx.fillStyle = online ? THEME.good : THEME.bad
-        ctx.font = '24px system-ui, sans-serif'
-        ctx.fillText(online ? '🟢' : '🔴', cw - 34, y)
-        ctx.textAlign = 'left'
+        statusDot(ctx, cw - 40, y - 8, 7, online ? THEME.good : THEME.bad)
         y += 38
       })
       y += 8
@@ -218,11 +229,11 @@ export function makeSystemCard(store) {
 export function makeGithubCard(store) {
   return new SpatialCard({
     id: 'github',
-    title: 'GITHUB',
-    icon: '🐙',
+    title: 'REPOSITORY',
+    icon: 'git',
     render(ctx, cw, ch, { expanded, state }) {
       const g = state.github || {}
-      drawHeader(ctx, '🐙', 'GITHUB', cw)
+      drawHeader(ctx, 'git', 'REPOSITORY', cw)
       let y = 130
       const row = (label, val) => {
         text(ctx, label, 34, y, THEME.textDim, THEME.fontSmall)
@@ -250,11 +261,11 @@ export function makeFocusCard(store) {
   return new SpatialCard({
     id: 'focus',
     title: 'FOCUS',
-    icon: '🎯',
+    icon: 'focus',
     widthM: 0.14,
     render(ctx, cw, ch, { state }, api) {
       const f = state.focus || {}
-      drawHeader(ctx, '🎯', 'FOCUS', cw)
+      drawHeader(ctx, 'focus', 'FOCUS', cw)
 
       ctx.textAlign = 'center'
       ctx.fillStyle = f.done ? THEME.good : THEME.text

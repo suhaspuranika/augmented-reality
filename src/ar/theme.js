@@ -48,12 +48,16 @@ export function drawGlassCard(ctx, w, h) {
   ctx.stroke()
 }
 
-export function drawHeader(ctx, icon, title, w) {
+import { icon as drawIcon } from './icons.js'
+
+// Draws a vector icon + title header. iconName is a key in icons.js.
+export function drawHeader(ctx, iconName, title, w) {
   ctx.textBaseline = 'alphabetic'
   ctx.textAlign = 'left'
+  drawIcon(ctx, iconName, 46, 52, 30, THEME.accent)
   ctx.fillStyle = THEME.accent
-  ctx.font = THEME.fontTitle
-  ctx.fillText(icon + '  ' + title, 34, 66)
+  ctx.font = 'bold 30px system-ui, -apple-system, Segoe UI, sans-serif'
+  ctx.fillText(title, 74, 62)
 }
 
 // Horizontal progress bar. pct is 0..1.

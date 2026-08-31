@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { THEME, roundRect } from './theme.js'
 import { ALL_APPS } from './screenApps.js'
+import { icon as drawIcon } from './icons.js'
 
 /**
  * ScreenWindow — an operable AR "computer screen".
@@ -213,12 +214,19 @@ export class ScreenWindow {
     ctx.font = '22px system-ui'
     ctx.fillText(this.store.get().clock.time || '', cw - 28, 36)
     ctx.textAlign = 'left'
-    // home button (if in app)
+    // home button (if in app) — drawn house glyph
     if (active) {
-      api.addHit('goHome', cw - 120, 12, 40, 36)
-      ctx.fillStyle = THEME.accent
-      ctx.font = 'bold 26px system-ui'
-      ctx.fillText('⌂', cw - 112, 38)
+      api.addHit('goHome', cw - 124, 10, 44, 40)
+      const hx = cw - 102
+      const hy = 30
+      ctx.strokeStyle = THEME.accent
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(hx - 12, hy + 2)
+      ctx.lineTo(hx, hy - 12)
+      ctx.lineTo(hx + 12, hy + 2)
+      ctx.stroke()
+      ctx.strokeRect(hx - 9, hy + 2, 18, 12)
     }
   }
 
@@ -241,12 +249,11 @@ export class ScreenWindow {
       ctx.strokeStyle = THEME.stroke
       ctx.lineWidth = 1
       ctx.stroke()
-      ctx.font = '56px system-ui'
-      ctx.textAlign = 'center'
-      ctx.fillText(app.icon, x + iconW / 2, y + 66)
+      drawIcon(ctx, app.icon, x + iconW / 2, y + 46, 44, THEME.accent)
       ctx.font = '22px system-ui'
       ctx.fillStyle = THEME.text
-      ctx.fillText(app.title, x + iconW / 2, y + 104)
+      ctx.textAlign = 'center'
+      ctx.fillText(app.title, x + iconW / 2, y + 100)
       ctx.textAlign = 'left'
       api.addHit('openApp', x, y, iconW, 120, { id: app.id })
     })
@@ -263,11 +270,10 @@ export class ScreenWindow {
     const spacing = 74
     let x = cw / 2 - ((n - 1) * spacing) / 2
     this.apps.forEach((app) => {
-      ctx.font = '34px system-ui'
-      ctx.textAlign = 'center'
-      ctx.fillText(app.icon, x, dockY + 32)
+      const activeApp = app.id === this.s.activeApp
+      drawIcon(ctx, app.icon, x, dockY + 22, 28, activeApp ? THEME.accent : THEME.textDim)
       api.addHit('openApp', x - 30, dockY - 2, 60, 46, { id: app.id })
-      if (app.id === this.s.activeApp) {
+      if (activeApp) {
         ctx.beginPath()
         ctx.arc(x, dockY + 42, 3, 0, Math.PI * 2)
         ctx.fillStyle = THEME.accent
@@ -321,9 +327,9 @@ export class ScreenWindow {
       this.hitRegions.push({ name, x, y: by, w, h: kh })
     }
     const cx = vp.x + vp.w / 2
-    mk('⌫', 'kbBack', cx - 330, 140)
+    mk('delete', 'kbBack', cx - 330, 140)
     mk('space', 'kbSpace', cx - 170, 340)
-    mk('⏎', 'kbEnter', cx + 190, 140)
+    mk('enter', 'kbEnter', cx + 190, 140)
   }
 
   // Route a canvas-space tap (u,v in 0..1, v from top).

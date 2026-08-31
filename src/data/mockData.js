@@ -28,7 +28,6 @@ export function initialWeather() {
   return {
     tempC: 28,
     condition: 'Partly Cloudy',
-    icon: '⛅',
     location: 'Bengaluru',
     humidity: 68,
     windKmh: 12,
@@ -37,9 +36,9 @@ export function initialWeather() {
 
 export function initialNotifications() {
   return [
-    { id: 'n1', icon: '🟢', text: 'Firebase alert', priority: 'low', read: false, ts: '2m' },
-    { id: 'n2', icon: '🟣', text: 'GitHub PR merged', priority: 'normal', read: false, ts: '9m' },
-    { id: 'n3', icon: '🟡', text: 'Meeting in 10 min', priority: 'high', read: false, ts: 'now' },
+    { id: 'n1', text: 'Firebase alert', priority: 'low', read: false, ts: '2m' },
+    { id: 'n2', text: 'GitHub PR merged', priority: 'normal', read: false, ts: '9m' },
+    { id: 'n3', text: 'Meeting in 10 min', priority: 'high', read: false, ts: 'now' },
   ]
 }
 

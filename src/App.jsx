@@ -100,7 +100,7 @@ export default function App() {
   return (
     <div style={styles.wrap}>
       <div style={styles.card}>
-        <h1 style={styles.title}>🤖 AR Desk Companion 2.0</h1>
+        <h1 style={styles.title}>AR Desk Companion 2.0</h1>
         <p style={styles.subtitle}>Spatial workspace for your desk</p>
         <p style={styles.status}>{messageFor(appState)}</p>
 
