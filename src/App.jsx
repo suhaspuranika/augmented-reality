@@ -1,138 +1,141 @@
 import { useEffect, useRef, useState } from 'react'
 import { startARSession } from './ar/arScene.js'
+import { startPreview3D } from './ar/preview3d.js'
+import { createStore } from './data/dashboardStore.js'
+import { startServices } from './data/services.js'
+import { AppState, messageFor } from './ar/states.js'
 
 export default function App() {
-  const [supported, setSupported] = useState(null) // null = checking
-  const [status, setStatus] = useState('Checking device...')
+  const [supported, setSupported] = useState(null)
+  const [appState, setAppState] = useState(AppState.INITIAL)
   const [running, setRunning] = useState(false)
-  const controllerRef = useRef(null)
+  const [preview, setPreview] = useState(false)
 
-  // Live dashboard data. In a real app you'd wire these to Firebase / your API.
-  const dashboardRef = useRef({
-    greeting: greetingFor(new Date()),
-    name: 'Suhas',
-    time: '',
-    date: '',
-    weather: '28°C  Sunny',
-    tasks: [
-      { text: 'Finish API integration', done: false },
-      { text: 'Fix notification bug', done: false },
-      { text: 'Review PR #42', done: true },
-      { text: 'Update Grooviz docs', done: false },
-    ],
-    meetings: [
-      { time: '11:00 AM', title: 'Standup' },
-      { time: '2:00 PM', title: 'Design review' },
-      { time: '4:30 PM', title: 'Client demo' },
-    ],
-    backend: 'Online',
-    firebase: 'Online',
-    github: 'Online',
-    notifications: 3,
-    pomodoro: 24 * 60 + 32, // seconds remaining
-  })
+  const storeRef = useRef(null)
+  const stopServicesRef = useRef(null)
+  const arRef = useRef(null)
+  const previewRef = useRef(null)
+  const mountRef = useRef(null)
 
+  // Create the single store + start data services once.
+  if (!storeRef.current) storeRef.current = createStore()
+  useEffect(() => {
+    stopServicesRef.current = startServices(storeRef.current)
+    return () => stopServicesRef.current?.()
+  }, [])
+
+  // AR support check.
   useEffect(() => {
     if (!('xr' in navigator)) {
       setSupported(false)
-      setStatus('WebXR not available in this browser.')
+      setAppState(AppState.AR_NOT_SUPPORTED)
       return
     }
     navigator.xr
       .isSessionSupported('immersive-ar')
       .then((ok) => {
         setSupported(ok)
-        setStatus(
-          ok
-            ? 'Ready. Tap "Start AR", then aim at your desk and tap to place the robot.'
-            : 'immersive-ar not supported. Use Chrome on Android with ARCore, or an AR headset browser.'
-        )
+        setAppState(ok ? AppState.AR_SUPPORTED : AppState.AR_NOT_SUPPORTED)
       })
       .catch(() => {
         setSupported(false)
-        setStatus('Could not query WebXR support.')
+        setAppState(AppState.AR_NOT_SUPPORTED)
       })
   }, [])
 
-  // Tick every second: countdown, live clock, date, and greeting.
-  useEffect(() => {
-    const id = setInterval(() => {
-      const d = dashboardRef.current
-      d.pomodoro = Math.max(0, d.pomodoro - 1)
-      const now = new Date()
-      d.time = now.toLocaleTimeString([], {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-      d.date = now.toLocaleDateString([], {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-      })
-      d.greeting = greetingFor(now)
-    }, 1000)
-    return () => clearInterval(id)
-  }, [])
-
-  async function handleStart() {
+  async function handleStartAR() {
     try {
-      setStatus('Starting AR session...')
-      const controller = await startARSession({
-        getData: () => dashboardRef.current,
+      setAppState(AppState.SCANNING)
+      arRef.current = await startARSession({
+        store: storeRef.current,
+        onState: (s) => setAppState(s),
         onEnd: () => {
           setRunning(false)
-          setStatus('AR session ended.')
+          setAppState(AppState.SESSION_ENDED)
         },
-        onStatus: (msg) => setStatus(msg),
       })
-      controllerRef.current = controller
       setRunning(true)
     } catch (err) {
       console.error(err)
-      setStatus('Failed to start AR: ' + (err?.message || err))
+      const denied = /denied|permission/i.test(err?.message || '')
+      setAppState(denied ? AppState.CAMERA_PERMISSION_DENIED : AppState.AR_SESSION_FAILED)
     }
   }
 
+  function enterPreview() {
+    setPreview(true)
+  }
+  function exitPreview() {
+    previewRef.current?.stop()
+    previewRef.current = null
+    setPreview(false)
+  }
+
+  // Start the 3D preview once its mount is on screen.
+  useEffect(() => {
+    if (preview && mountRef.current && !previewRef.current) {
+      previewRef.current = startPreview3D({
+        store: storeRef.current,
+        mount: mountRef.current,
+      })
+    }
+  }, [preview])
+
+  if (preview) {
+    return (
+      <div style={styles.previewWrap}>
+        <div ref={mountRef} style={styles.previewCanvas} />
+        <button style={styles.exitPreview} onClick={exitPreview}>
+          Exit 3D Preview
+        </button>
+        <div style={styles.previewHint}>
+          Drag to orbit · scroll to zoom · click cards to expand / toggle tasks
+        </div>
+      </div>
+    )
+  }
+
+  if (running) return null // AR session owns the screen
+
   return (
     <div style={styles.wrap}>
-      {!running && (
-        <div style={styles.card}>
-          <h1 style={styles.title}>🤖 AR Desk Companion</h1>
-          <p style={styles.status}>{status}</p>
+      <div style={styles.card}>
+        <h1 style={styles.title}>🤖 AR Desk Companion 2.0</h1>
+        <p style={styles.subtitle}>Spatial workspace for your desk</p>
+        <p style={styles.status}>{messageFor(appState)}</p>
 
-          <button
-            style={{
-              ...styles.button,
-              opacity: supported ? 1 : 0.5,
-              cursor: supported ? 'pointer' : 'not-allowed',
-            }}
-            onClick={handleStart}
-            disabled={!supported}
-          >
-            Start AR
-          </button>
+        <button
+          style={{
+            ...styles.button,
+            opacity: supported ? 1 : 0.5,
+            cursor: supported ? 'pointer' : 'not-allowed',
+          }}
+          onClick={handleStartAR}
+          disabled={!supported}
+        >
+          Start AR
+        </button>
 
-          <div style={styles.hint}>
-            <p style={styles.hintTitle}>How it works</p>
-            <ol style={styles.list}>
-              <li>Open this page on an AR-capable phone over HTTPS.</li>
-              <li>Tap <b>Start AR</b> and grant camera access.</li>
-              <li>Slowly aim at your desk. A ring shows detected surface.</li>
-              <li>Tap the screen to drop the robot + dashboard on the desk.</li>
-              <li>Tap the robot to expand / collapse the dashboard.</li>
-            </ol>
-          </div>
+        <button style={styles.secondary} onClick={enterPreview}>
+          Enter 3D Preview
+        </button>
+
+        <div style={styles.hint}>
+          <p style={styles.hintTitle}>How it works</p>
+          <ol style={styles.list}>
+            <li>Open on an AR-capable Android phone over HTTPS.</li>
+            <li>Tap <b>Start AR</b>, grant camera access.</li>
+            <li>Scan your desk until the ring appears, then tap to place.</li>
+            <li>Cards arrange around the robot. Tap to expand, drag to move.</li>
+            <li>Tap the robot for the quick-action menu.</li>
+          </ol>
+          <p style={styles.note}>
+            No AR device? Use <b>3D Preview</b> to explore on desktop.
+          </p>
         </div>
-      )}
+      </div>
     </div>
   )
-}
-
-function greetingFor(date) {
-  const h = date.getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 17) return 'Good afternoon'
-  return 'Good evening'
 }
 
 const styles = {
@@ -145,26 +148,67 @@ const styles = {
     boxSizing: 'border-box',
   },
   card: {
-    width: 'min(440px, 100%)',
-    background: 'rgba(20,26,40,0.9)',
-    border: '1px solid #223',
-    borderRadius: 16,
-    padding: 24,
-    boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+    width: 'min(460px, 100%)',
+    background: 'rgba(18,24,38,0.92)',
+    border: '1px solid rgba(120,140,170,0.28)',
+    borderRadius: 20,
+    padding: 26,
+    boxShadow: '0 24px 70px rgba(0,0,0,0.55)',
+    backdropFilter: 'blur(8px)',
   },
-  title: { margin: '0 0 12px', fontSize: 24 },
-  status: { margin: '0 0 20px', color: '#9fb3c8', lineHeight: 1.5 },
+  title: { margin: '0 0 4px', fontSize: 25 },
+  subtitle: { margin: '0 0 16px', color: '#7dd3fc', fontSize: 14 },
+  status: { margin: '0 0 20px', color: '#9aa8bd', lineHeight: 1.5 },
   button: {
     width: '100%',
     padding: '14px 18px',
     fontSize: 18,
     fontWeight: 600,
-    color: '#0b0f1a',
-    background: 'linear-gradient(135deg,#5eead4,#38bdf8)',
+    color: '#08131a',
+    background: 'linear-gradient(135deg,#5eead4,#7dd3fc)',
     border: 'none',
     borderRadius: 12,
   },
-  hint: { marginTop: 24, borderTop: '1px solid #223', paddingTop: 16 },
-  hintTitle: { margin: '0 0 8px', color: '#e6edf3', fontWeight: 600 },
-  list: { margin: 0, paddingLeft: 20, color: '#9fb3c8', lineHeight: 1.7 },
+  secondary: {
+    width: '100%',
+    marginTop: 10,
+    padding: '12px 18px',
+    fontSize: 15,
+    fontWeight: 600,
+    color: '#cfe8ff',
+    background: 'transparent',
+    border: '1px solid rgba(125,211,252,0.5)',
+    borderRadius: 12,
+    cursor: 'pointer',
+  },
+  hint: { marginTop: 24, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 16 },
+  hintTitle: { margin: '0 0 8px', color: '#e8edf5', fontWeight: 600 },
+  list: { margin: 0, paddingLeft: 20, color: '#9aa8bd', lineHeight: 1.7 },
+  note: { marginTop: 12, color: '#7dd3fc', fontSize: 13 },
+  previewWrap: { position: 'relative', height: '100%', width: '100%' },
+  previewCanvas: { position: 'absolute', inset: 0 },
+  exitPreview: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    padding: '10px 16px',
+    border: 'none',
+    borderRadius: 10,
+    fontWeight: 600,
+    background: 'rgba(248,113,113,0.92)',
+    color: '#fff',
+    cursor: 'pointer',
+  },
+  previewHint: {
+    position: 'absolute',
+    bottom: 16,
+    left: '50%',
+    transform: 'translateX(-50%)',
+    color: '#9aa8bd',
+    fontSize: 13,
+    background: 'rgba(11,15,26,0.7)',
+    padding: '8px 14px',
+    borderRadius: 20,
+    whiteSpace: 'nowrap',
+  },
 }
