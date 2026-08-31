@@ -55,7 +55,7 @@ export async function startARSession({ getData, onEnd, onStatus }) {
   companion.add(robot)
 
   const dashboard = createDashboard()
-  dashboard.group.position.set(0.22, 0.12, 0) // sits beside the robot
+  dashboard.group.position.set(0.28, 0.2, 0) // floats beside the robot
   companion.add(dashboard.group)
 
   let dashboardExpanded = true

@@ -9,11 +9,26 @@ export default function App() {
 
   // Live dashboard data. In a real app you'd wire these to Firebase / your API.
   const dashboardRef = useRef({
-    greeting: 'Welcome, Suhas',
-    tasks: ['Finish API', 'Fix notification', 'Review PR #42'],
-    nextMeeting: '4:30 PM',
+    greeting: greetingFor(new Date()),
+    name: 'Suhas',
+    time: '',
+    date: '',
+    weather: '28°C  Sunny',
+    tasks: [
+      { text: 'Finish API integration', done: false },
+      { text: 'Fix notification bug', done: false },
+      { text: 'Review PR #42', done: true },
+      { text: 'Update Grooviz docs', done: false },
+    ],
+    meetings: [
+      { time: '11:00 AM', title: 'Standup' },
+      { time: '2:00 PM', title: 'Design review' },
+      { time: '4:30 PM', title: 'Client demo' },
+    ],
     backend: 'Online',
-    notifications: 2,
+    firebase: 'Online',
+    github: 'Online',
+    notifications: 3,
     pomodoro: 24 * 60 + 32, // seconds remaining
   })
 
@@ -39,13 +54,22 @@ export default function App() {
       })
   }, [])
 
-  // Pomodoro countdown ticking every second, reflected in the AR dashboard.
+  // Tick every second: countdown, live clock, date, and greeting.
   useEffect(() => {
     const id = setInterval(() => {
-      dashboardRef.current.pomodoro = Math.max(
-        0,
-        dashboardRef.current.pomodoro - 1
-      )
+      const d = dashboardRef.current
+      d.pomodoro = Math.max(0, d.pomodoro - 1)
+      const now = new Date()
+      d.time = now.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      d.date = now.toLocaleDateString([], {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      })
+      d.greeting = greetingFor(now)
     }, 1000)
     return () => clearInterval(id)
   }, [])
@@ -102,6 +126,13 @@ export default function App() {
       )}
     </div>
   )
+}
+
+function greetingFor(date) {
+  const h = date.getHours()
+  if (h < 12) return 'Good morning'
+  if (h < 17) return 'Good afternoon'
+  return 'Good evening'
 }
 
 const styles = {
