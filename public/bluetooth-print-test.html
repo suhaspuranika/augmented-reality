@@ -82,6 +82,41 @@
             padding: 12px;
             border-radius: 6px;
         }
+        .device-list { list-style: none; padding: 0; margin: 0; }
+        .device-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px;
+            border: 1px solid #e2e2e6;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            background: #fafafb;
+        }
+        .device-item .meta { min-width: 0; }
+        .device-item .name { font-weight: 600; font-size: 15px; word-break: break-word; }
+        .device-item .sub { font-size: 12px; color: #888; word-break: break-all; }
+        .device-item button {
+            width: auto;
+            margin: 0;
+            padding: 8px 14px;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+        .empty { font-size: 14px; color: #888; }
+        .badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: #e6f0ff;
+            color: #0071e3;
+            margin-left: 6px;
+        }
+        .badge.on { background: #e6f9ec; color: #00802b; }
+        .badge.off { background: #eee; color: #888; }
         @media print {
             body { background: #fff; padding: 0; max-width: none; }
             .no-print { display: none !important; }
@@ -112,6 +147,18 @@ Thank you for shopping!
 
         <button id="printBtn">Connect &amp; Print (Web Bluetooth / BLE)</button>
         <button id="systemPrintBtn" class="secondary">Print via System Dialog (works with OS-paired printer)</button>
+    </div>
+
+    <div class="card no-print">
+        <strong>Bluetooth Devices</strong>
+        <p class="empty" style="margin-top:4px;">
+            The browser only exposes devices you have authorized for this site. Use
+            <em>Add device</em> to open the chooser, or <em>Live scan</em> where supported.
+        </p>
+        <ul id="deviceList" class="device-list"></ul>
+        <div id="deviceEmpty" class="empty">No authorized devices yet.</div>
+        <button id="addDeviceBtn" style="margin-top:10px;">Add device (open chooser)</button>
+        <button id="scanBtn" class="secondary">Live scan (experimental)</button>
     </div>
 
     <div class="card no-print">
@@ -149,6 +196,13 @@ Thank you for shopping!
         const statusDiv = document.getElementById('status');
         const receiptText = document.getElementById('receiptText');
         const platformBanner = document.getElementById('platformBanner');
+        const deviceList = document.getElementById('deviceList');
+        const deviceEmpty = document.getElementById('deviceEmpty');
+        const addDeviceBtn = document.getElementById('addDeviceBtn');
+        const scanBtn = document.getElementById('scanBtn');
+
+        // Devices we know about this session, keyed by id (or name fallback).
+        const knownDevices = new Map();
 
         function log(message, type = '') {
             statusDiv.textContent = message;
@@ -191,6 +245,137 @@ Thank you for shopping!
             printBtn.disabled = true;
         }
 
+        // ---- Device list rendering ----------------------------------------
+        function deviceKey(device) {
+            return device.id || device.name || Math.random().toString(36).slice(2);
+        }
+
+        function upsertDevice(device, extra = {}) {
+            const key = deviceKey(device);
+            const prev = knownDevices.get(key) || {};
+            knownDevices.set(key, { device, ...prev, ...extra });
+            renderDevices();
+            return key;
+        }
+
+        function renderDevices() {
+            deviceList.innerHTML = '';
+            if (knownDevices.size === 0) {
+                deviceEmpty.style.display = 'block';
+                return;
+            }
+            deviceEmpty.style.display = 'none';
+
+            for (const [key, entry] of knownDevices) {
+                const { device } = entry;
+                const connected = !!(device.gatt && device.gatt.connected);
+
+                const li = document.createElement('li');
+                li.className = 'device-item';
+
+                const meta = document.createElement('div');
+                meta.className = 'meta';
+
+                const name = document.createElement('div');
+                name.className = 'name';
+                name.textContent = device.name || 'Unnamed device';
+                const badge = document.createElement('span');
+                badge.className = 'badge ' + (connected ? 'on' : 'off');
+                badge.textContent = connected ? 'connected' : 'not connected';
+                name.appendChild(badge);
+
+                const sub = document.createElement('div');
+                sub.className = 'sub';
+                const rssi = entry.rssi != null ? ` · RSSI ${entry.rssi} dBm` : '';
+                sub.textContent = `id: ${device.id || 'n/a'}${rssi}`;
+
+                meta.appendChild(name);
+                meta.appendChild(sub);
+
+                const printOne = document.createElement('button');
+                printOne.textContent = 'Print';
+                printOne.addEventListener('click', () => printToDevice(device));
+
+                li.appendChild(meta);
+                li.appendChild(printOne);
+                deviceList.appendChild(li);
+            }
+        }
+
+        // Load devices this site was already granted access to.
+        async function loadAuthorizedDevices() {
+            if (!navigator.bluetooth || !navigator.bluetooth.getDevices) return;
+            try {
+                const devices = await navigator.bluetooth.getDevices();
+                for (const d of devices) upsertDevice(d);
+                if (devices.length) {
+                    log(`Loaded ${devices.length} previously authorized device(s).`);
+                }
+            } catch (e) {
+                console.warn('getDevices() failed:', e);
+            }
+        }
+
+        // Open the browser chooser to authorize a new device, then add it to the list.
+        async function addDevice() {
+            if (!navigator.bluetooth) {
+                log("Web Bluetooth is not supported here. Use 'Print via System Dialog'.", 'error');
+                return;
+            }
+            try {
+                log('Opening device chooser...');
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '000018f0-0000-1000-8000-00805f9b34fb',
+                        '0000e0ff-0000-1000-8000-00805f9b34fb',
+                        '49535343-fe7d-4ae5-8fa9-9fafd205e455'
+                    ]
+                });
+                device.addEventListener('gattserverdisconnected', renderDevices);
+                upsertDevice(device);
+                log(`Added: ${device.name || 'Unnamed device'}.`, 'success');
+            } catch (e) {
+                const msg = e && e.message ? e.message : String(e);
+                if (/cancelled|chooser/i.test(msg)) {
+                    log('Chooser cancelled. Note: Classic (BR/EDR) printers do not appear here.', 'warn');
+                } else {
+                    log(`Error: ${msg}`, 'error');
+                }
+            }
+        }
+
+        // Experimental live scan (Chrome flag: chrome://flags/#enable-experimental-web-platform-features).
+        let scanController = null;
+        async function liveScan() {
+            if (!navigator.bluetooth || !navigator.bluetooth.requestLEScan) {
+                log("Live scan (requestLEScan) is not available in this browser. Use 'Add device' instead.", 'warn');
+                return;
+            }
+            if (scanController) {
+                scanController.stop();
+                scanController = null;
+                scanBtn.textContent = 'Live scan (experimental)';
+                log('Live scan stopped.');
+                return;
+            }
+            try {
+                log('Starting live scan... (BLE advertisements only)');
+                navigator.bluetooth.addEventListener('advertisementreceived', (event) => {
+                    upsertDevice(event.device, { rssi: event.rssi });
+                });
+                scanController = await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true });
+                scanBtn.textContent = 'Stop live scan';
+                log('Live scan running. Nearby BLE devices will populate the list.', 'success');
+            } catch (e) {
+                const msg = e && e.message ? e.message : String(e);
+                log(`Live scan failed: ${msg}. Enable it via chrome://flags/#enable-experimental-web-platform-features, or use 'Add device'.`, 'error');
+            }
+        }
+
+        addDeviceBtn.addEventListener('click', addDevice);
+        scanBtn.addEventListener('click', liveScan);
+
         // ---- System print dialog fallback ---------------------------------
         function systemPrint() {
             document.getElementById('printReceipt').textContent = receiptText.value;
@@ -198,42 +383,43 @@ Thank you for shopping!
         }
         systemPrintBtn.addEventListener('click', systemPrint);
 
-        // ---- Web Bluetooth (BLE) path -------------------------------------
-        async function startPrint() {
-            if (!navigator.bluetooth) {
-                log("Web Bluetooth is not supported here. Use the 'Print via System Dialog' button, or Chrome/Edge on Android or desktop.", 'error');
+        // ---- Web Bluetooth (BLE) print ------------------------------------
+        function buildPayload() {
+            const encoder = new TextEncoder();
+            const escInit = new Uint8Array([0x1B, 0x40]);            // ESC @ (init)
+            const textBytes = encoder.encode(receiptText.value);
+            const escCut = new Uint8Array([0x1D, 0x56, 0x41, 0x03]); // GS V A (feed & cut)
+            const payload = new Uint8Array(escInit.length + textBytes.length + escCut.length);
+            payload.set(escInit, 0);
+            payload.set(textBytes, escInit.length);
+            payload.set(escCut, escInit.length + textBytes.length);
+            return payload;
+        }
+
+        // Connect to a specific device object and print to it.
+        async function printToDevice(device) {
+            if (!device || !device.gatt) {
+                log('This device cannot be connected via Web Bluetooth.', 'error');
                 return;
             }
-
             printBtn.disabled = true;
-            log("Searching for BLE devices... (Classic/BR-EDR printers will not appear)");
-
             try {
-                const device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [
-                        '000018f0-0000-1000-8000-00805f9b34fb', // Common custom printer service
-                        '0000e0ff-0000-1000-8000-00805f9b34fb', // Another common printer service
-                        '49535343-fe7d-4ae5-8fa9-9fafd205e455'  // ISSC / common serial-over-BLE service
-                    ]
-                });
-
                 const name = device.name || 'Unnamed device';
                 log(`Connecting to: ${name}...`);
                 const server = await device.gatt.connect();
+                renderDevices();
 
-                log("Discovering primary GATT services...");
+                log('Discovering primary GATT services...');
                 const services = await server.getPrimaryServices();
 
                 if (!services || services.length === 0) {
                     throw new Error(
-                        "Connected, but no GATT services were found. This device is almost certainly a Bluetooth Classic (BR/EDR) printer, which Web Bluetooth cannot use. Use 'Print via System Dialog' instead."
+                        "Connected, but no GATT services were found. This is almost certainly a Bluetooth Classic (BR/EDR) printer, which Web Bluetooth cannot use. Use 'Print via System Dialog' instead."
                     );
                 }
 
                 let writeCharacteristic = null;
-                log("Scanning services for a writable characteristic...");
-
+                log('Scanning services for a writable characteristic...');
                 for (const service of services) {
                     const characteristics = await service.getCharacteristics();
                     for (const char of characteristics) {
@@ -251,20 +437,8 @@ Thank you for shopping!
                     );
                 }
 
-                log("Preparing ESC/POS printer payload...");
-
-                const encoder = new TextEncoder();
-                const escInit = new Uint8Array([0x1B, 0x40]);            // ESC @ (init)
-                const textBytes = encoder.encode(receiptText.value);
-                const escCut = new Uint8Array([0x1D, 0x56, 0x41, 0x03]); // GS V A (feed & cut)
-
-                const payload = new Uint8Array(escInit.length + textBytes.length + escCut.length);
-                payload.set(escInit, 0);
-                payload.set(textBytes, escInit.length);
-                payload.set(escCut, escInit.length + textBytes.length);
-
-                log("Sending data to printer in 20-byte chunks...");
-
+                log('Sending ESC/POS data in 20-byte chunks...');
+                const payload = buildPayload();
                 const chunkSize = 20;
                 for (let i = 0; i < payload.length; i += chunkSize) {
                     const chunk = payload.slice(i, i + chunkSize);
@@ -276,9 +450,36 @@ Thank you for shopping!
                     await sleep(30);
                 }
 
-                log("Print job sent successfully!", 'success');
+                log('Print job sent successfully!', 'success');
                 await device.gatt.disconnect();
+                renderDevices();
+            } catch (error) {
+                const msg = error && error.message ? error.message : String(error);
+                log(`Error: ${msg}`, 'error');
+            } finally {
+                printBtn.disabled = !platform.hasWebBluetooth;
+            }
+        }
 
+        // Main button: pick a device via the chooser, then print to it.
+        async function startPrint() {
+            if (!navigator.bluetooth) {
+                log("Web Bluetooth is not supported here. Use the 'Print via System Dialog' button, or Chrome/Edge on Android or desktop.", 'error');
+                return;
+            }
+            try {
+                log('Searching for BLE devices... (Classic/BR-EDR printers will not appear)');
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '000018f0-0000-1000-8000-00805f9b34fb',
+                        '0000e0ff-0000-1000-8000-00805f9b34fb',
+                        '49535343-fe7d-4ae5-8fa9-9fafd205e455'
+                    ]
+                });
+                device.addEventListener('gattserverdisconnected', renderDevices);
+                upsertDevice(device);
+                await printToDevice(device);
             } catch (error) {
                 const msg = error && error.message ? error.message : String(error);
                 if (/User cancelled|cancelled|chooser/i.test(msg)) {
@@ -286,12 +487,21 @@ Thank you for shopping!
                 } else {
                     log(`Error: ${msg}`, 'error');
                 }
-            } finally {
-                printBtn.disabled = !platform.hasWebBluetooth ? true : false;
             }
         }
 
         printBtn.addEventListener('click', startPrint);
+
+        // Populate the list with any previously authorized devices on load.
+        if (!platform.hasWebBluetooth) {
+            addDeviceBtn.disabled = true;
+            scanBtn.disabled = true;
+        } else {
+            loadAuthorizedDevices();
+            if (!navigator.bluetooth.requestLEScan) {
+                scanBtn.title = 'requestLEScan not supported in this browser';
+            }
+        }
     </script>
 </body>
 </html>
