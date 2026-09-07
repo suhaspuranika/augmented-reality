@@ -35,6 +35,8 @@
         }
         button:hover { background-color: #0077ed; }
         button:disabled { background-color: #999; cursor: not-allowed; }
+        button.secondary { background-color: #444; }
+        button.secondary:hover { background-color: #555; }
         textarea {
             width: 100%;
             height: 100px;
@@ -55,13 +57,46 @@
         }
         .error { background: #ffebeb !important; color: #cc0000; }
         .success { background: #e6f9ec !important; color: #00802b; }
+        .warn { background: #fff5e0 !important; color: #8a5a00; }
+        .banner {
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 12px 14px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            background: #fff5e0;
+            color: #8a5a00;
+            border: 1px solid #f0d59a;
+        }
+        .banner strong { color: #7a4f00; }
+        details { font-size: 13px; line-height: 1.6; color: #444; }
+        details summary { cursor: pointer; font-weight: 600; color: #0071e3; }
+        details ul { padding-left: 18px; }
+        .receipt-preview {
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 13px;
+            line-height: 1.4;
+            background: #fafafa;
+            border: 1px dashed #bbb;
+            padding: 12px;
+            border-radius: 6px;
+        }
+        @media print {
+            body { background: #fff; padding: 0; max-width: none; }
+            .no-print { display: none !important; }
+            #printArea { display: block !important; }
+        }
+        #printArea { display: none; }
     </style>
 </head>
 <body>
 
-    <h1>POS Bluetooth Print Test</h1>
-    
-    <div class="card">
+    <h1 class="no-print">POS Bluetooth Print Test</h1>
+
+    <div id="platformBanner" class="banner no-print" style="display:none;"></div>
+
+    <div class="card no-print">
         <label for="receiptText"><strong>Receipt Text:</strong></label>
         <textarea id="receiptText">TEST RECEIPT
 
@@ -74,67 +109,131 @@ Thank you for shopping!
 
 
 </textarea>
-        
-        <button id="printBtn">Connect &amp; Print</button>
+
+        <button id="printBtn">Connect &amp; Print (Web Bluetooth / BLE)</button>
+        <button id="systemPrintBtn" class="secondary">Print via System Dialog (works with OS-paired printer)</button>
     </div>
 
-    <div class="card">
+    <div class="card no-print">
         <strong>Status Log:</strong>
-        <div id="status">Ready. Click 'Connect &amp; Print'.</div>
+        <div id="status">Ready. Web Bluetooth only works with BLE (GATT) printers. See notes below.</div>
     </div>
+
+    <div class="card no-print">
+        <details>
+            <summary>Why isn't my printer detected?</summary>
+            <p>Web Bluetooth (<code>navigator.bluetooth</code>) can only talk to
+            <strong>Bluetooth Low Energy (BLE / GATT)</strong> devices. Most thermal / POS
+            printers use <strong>Bluetooth Classic (BR/EDR)</strong> for print jobs, which
+            the browser cannot connect to at all.</p>
+            <ul>
+                <li>If your printer shows <code>BR/EDR</code> (no <code>LE</code>), Web Bluetooth cannot use it.</li>
+                <li>Classic printers appear as "Unknown or Unsupported Device" in the browser picker.</li>
+                <li>Windows has the weakest Web Bluetooth support; Chrome/Edge on Android or ChromeOS work best.</li>
+            </ul>
+            <p><strong>Ways that do work with a Classic (BR/EDR) printer:</strong></p>
+            <ul>
+                <li><strong>Print via System Dialog</strong> (button above) after pairing the printer in your OS and installing its driver.</li>
+                <li>A network/Wi-Fi printer variant (send ESC/POS to its IP from a backend).</li>
+                <li>A small local bridge app on the paired machine that your web app POSTs to.</li>
+            </ul>
+        </details>
+    </div>
+
+    <!-- Hidden area rendered only when using the system print dialog -->
+    <div id="printArea"><pre class="receipt-preview" id="printReceipt"></pre></div>
 
     <script>
         const printBtn = document.getElementById('printBtn');
+        const systemPrintBtn = document.getElementById('systemPrintBtn');
         const statusDiv = document.getElementById('status');
         const receiptText = document.getElementById('receiptText');
+        const platformBanner = document.getElementById('platformBanner');
 
-        function log(message, isError = false, isSuccess = false) {
+        function log(message, type = '') {
             statusDiv.textContent = message;
-            statusDiv.className = ''; 
-            if (isError) statusDiv.classList.add('error');
-            if (isSuccess) statusDiv.classList.add('success');
+            statusDiv.className = type; // '', 'error', 'success', 'warn'
             console.log(message);
         }
 
-        // Helper function to sleep between sending small chunks
         const sleep = ms => new Promise(r => setTimeout(r, ms));
 
+        // ---- Platform capability detection --------------------------------
+        function detectPlatform() {
+            const ua = navigator.userAgent || '';
+            const hasWebBluetooth = 'bluetooth' in navigator;
+            const isWindows = /Windows/i.test(ua);
+            const isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && 'ontouchend' in document);
+            const isSecure = window.isSecureContext;
+
+            let msg = '';
+            if (!isSecure) {
+                msg = '⚠ This page is not in a secure context (HTTPS). Web Bluetooth requires HTTPS or localhost.';
+            } else if (!hasWebBluetooth) {
+                if (isIOS) {
+                    msg = '⚠ iOS Safari/Chrome do not support Web Bluetooth. Use the "Print via System Dialog" button, or Chrome/Edge on Android or desktop.';
+                } else {
+                    msg = '⚠ Web Bluetooth is not available in this browser. Use Chrome or Edge, or the "Print via System Dialog" button.';
+                }
+            } else if (isWindows) {
+                msg = 'ℹ Windows has limited Web Bluetooth support and only lists BLE (GATT) devices. Classic (BR/EDR) POS printers such as many DP-series models will NOT appear here. If your printer is BR/EDR only, use "Print via System Dialog" instead.';
+            } else {
+                msg = 'ℹ Web Bluetooth only connects to BLE (GATT) printers. Classic (BR/EDR) printers will not appear. If yours is BR/EDR only, use "Print via System Dialog".';
+            }
+
+            platformBanner.textContent = msg;
+            platformBanner.style.display = 'block';
+            return { hasWebBluetooth, isWindows, isIOS, isSecure };
+        }
+
+        const platform = detectPlatform();
+        if (!platform.hasWebBluetooth) {
+            printBtn.disabled = true;
+        }
+
+        // ---- System print dialog fallback ---------------------------------
+        function systemPrint() {
+            document.getElementById('printReceipt').textContent = receiptText.value;
+            window.print();
+        }
+        systemPrintBtn.addEventListener('click', systemPrint);
+
+        // ---- Web Bluetooth (BLE) path -------------------------------------
         async function startPrint() {
             if (!navigator.bluetooth) {
-                log("Web Bluetooth is not supported on this browser or platform (e.g., iOS). Please use Chrome/Edge on Android or Desktop.", true);
+                log("Web Bluetooth is not supported here. Use the 'Print via System Dialog' button, or Chrome/Edge on Android or desktop.", 'error');
                 return;
             }
 
             printBtn.disabled = true;
-            log("Searching for Bluetooth devices...");
+            log("Searching for BLE devices... (Classic/BR-EDR printers will not appear)");
 
             try {
-                // 1. Request any device that advertises services, or matches common printer configurations
-                // Many generic POS printers use common serial port profiles or custom UUIDs.
-                // Using acceptAllDevices is easiest for manual testing.
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
                     optionalServices: [
                         '000018f0-0000-1000-8000-00805f9b34fb', // Common custom printer service
                         '0000e0ff-0000-1000-8000-00805f9b34fb', // Another common printer service
-                        '49535343-fe7d-4ae5-8fa9-9fafd205e455'  // ISCC service
+                        '49535343-fe7d-4ae5-8fa9-9fafd205e455'  // ISSC / common serial-over-BLE service
                     ]
                 });
 
-                log(`Connecting to device: ${device.name || 'Unnamed Printer'}...`);
+                const name = device.name || 'Unnamed device';
+                log(`Connecting to: ${name}...`);
                 const server = await device.gatt.connect();
 
                 log("Discovering primary GATT services...");
                 const services = await server.getPrimaryServices();
-                
-                if (services.length === 0) {
-                    throw new Error("No GATT services found on this device.");
+
+                if (!services || services.length === 0) {
+                    throw new Error(
+                        "Connected, but no GATT services were found. This device is almost certainly a Bluetooth Classic (BR/EDR) printer, which Web Bluetooth cannot use. Use 'Print via System Dialog' instead."
+                    );
                 }
 
-                // Look for a characteristic we can write data to
                 let writeCharacteristic = null;
-                log("Scanning services for write characteristics...");
-                
+                log("Scanning services for a writable characteristic...");
+
                 for (const service of services) {
                     const characteristics = await service.getCharacteristics();
                     for (const char of characteristics) {
@@ -147,42 +246,48 @@ Thank you for shopping!
                 }
 
                 if (!writeCharacteristic) {
-                    throw new Error("Could not find a writable Bluetooth characteristic on this device.");
+                    throw new Error(
+                        "No writable characteristic found. This device does not expose a BLE print service — it is likely a Classic (BR/EDR) printer that Web Bluetooth cannot print to. Use 'Print via System Dialog' instead."
+                    );
                 }
 
                 log("Preparing ESC/POS printer payload...");
-                
-                // Encode structural ESC/POS commands
-                const encoder = new TextEncoder();
-                const escInit = new Uint8Array([0x1B, 0x40]); // Initialize printer (ESC @)
-                const textBytes = encoder.encode(receiptText.value);
-                const escCut = new Uint8Array([0x1D, 0x56, 0x41, 0x03]); // Paper Feed & Cut (GS V A)
 
-                // Combine into one large array
+                const encoder = new TextEncoder();
+                const escInit = new Uint8Array([0x1B, 0x40]);            // ESC @ (init)
+                const textBytes = encoder.encode(receiptText.value);
+                const escCut = new Uint8Array([0x1D, 0x56, 0x41, 0x03]); // GS V A (feed & cut)
+
                 const payload = new Uint8Array(escInit.length + textBytes.length + escCut.length);
                 payload.set(escInit, 0);
                 payload.set(textBytes, escInit.length);
                 payload.set(escCut, escInit.length + textBytes.length);
 
                 log("Sending data to printer in 20-byte chunks...");
-                
-                // BLE requires splitting data into small packets (typically 20 bytes max)
+
                 const chunkSize = 20;
                 for (let i = 0; i < payload.length; i += chunkSize) {
                     const chunk = payload.slice(i, i + chunkSize);
-                    await writeCharacteristic.writeValue(chunk);
-                    await sleep(30); // 30ms delay to prevent buffer crash
+                    if (writeCharacteristic.properties.writeWithoutResponse && !writeCharacteristic.properties.write) {
+                        await writeCharacteristic.writeValueWithoutResponse(chunk);
+                    } else {
+                        await writeCharacteristic.writeValue(chunk);
+                    }
+                    await sleep(30);
                 }
 
-                log("Print job sent successfully!", false, true);
-                
-                // Optional: clean disconnect
+                log("Print job sent successfully!", 'success');
                 await device.gatt.disconnect();
 
             } catch (error) {
-                log(`Error: ${error.message || error}`, true);
+                const msg = error && error.message ? error.message : String(error);
+                if (/User cancelled|cancelled|chooser/i.test(msg)) {
+                    log("Device selection cancelled. If your printer is BR/EDR only, it will not appear here — use 'Print via System Dialog'.", 'warn');
+                } else {
+                    log(`Error: ${msg}`, 'error');
+                }
             } finally {
-                printBtn.disabled = false;
+                printBtn.disabled = !platform.hasWebBluetooth ? true : false;
             }
         }
 
