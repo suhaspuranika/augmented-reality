@@ -120,6 +120,15 @@ export default function App() {
           Enter 3D Preview
         </button>
 
+        <a
+          style={styles.testLink}
+          href="/bluetooth-print-test.html"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          POS Bluetooth Print Test
+        </a>
+
         <div style={styles.hint}>
           <p style={styles.hintTitle}>How it works</p>
           <ol style={styles.list}>
@@ -179,6 +188,22 @@ const styles = {
     background: 'transparent',
     border: '1px solid rgba(125,211,252,0.5)',
     borderRadius: 12,
+    cursor: 'pointer',
+  },
+  testLink: {
+    display: 'block',
+    width: '100%',
+    marginTop: 10,
+    padding: '12px 18px',
+    fontSize: 15,
+    fontWeight: 600,
+    color: '#cfe8ff',
+    background: 'transparent',
+    border: '1px solid rgba(125,211,252,0.5)',
+    borderRadius: 12,
+    textAlign: 'center',
+    textDecoration: 'none',
+    boxSizing: 'border-box',
     cursor: 'pointer',
   },
   hint: { marginTop: 24, borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 16 },

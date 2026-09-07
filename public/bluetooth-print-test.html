@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA POS Bluetooth Print Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            max-width: 500px;
+            margin: 0 auto;
+            background-color: #f5f5f7;
+            color: #333;
+        }
+        h1 { font-size: 24px; text-align: center; }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        button {
+            width: 100%;
+            background-color: #0071e3;
+            color: white;
+            border: none;
+            padding: 14px;
+            font-size: 16px;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        button:hover { background-color: #0077ed; }
+        button:disabled { background-color: #999; cursor: not-allowed; }
+        textarea {
+            width: 100%;
+            height: 100px;
+            box-sizing: border-box;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-family: monospace;
+        }
+        #status {
+            padding: 12px;
+            border-radius: 6px;
+            background: #eee;
+            font-size: 14px;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .error { background: #ffebeb !important; color: #cc0000; }
+        .success { background: #e6f9ec !important; color: #00802b; }
+    </style>
+</head>
+<body>
+
+    <h1>POS Bluetooth Print Test</h1>
+    
+    <div class="card">
+        <label for="receiptText"><strong>Receipt Text:</strong></label>
+        <textarea id="receiptText">TEST RECEIPT
+
+Item 1      $10.00
+Item 2      $5.50
+
+TOTAL       $15.50
+
+Thank you for shopping!
+
+
+</textarea>
+        
+        <button id="printBtn">Connect &amp; Print</button>
+    </div>
+
+    <div class="card">
+        <strong>Status Log:</strong>
+        <div id="status">Ready. Click 'Connect &amp; Print'.</div>
+    </div>
+
+    <script>
+        const printBtn = document.getElementById('printBtn');
+        const statusDiv = document.getElementById('status');
+        const receiptText = document.getElementById('receiptText');
+
+        function log(message, isError = false, isSuccess = false) {
+            statusDiv.textContent = message;
+            statusDiv.className = ''; 
+            if (isError) statusDiv.classList.add('error');
+            if (isSuccess) statusDiv.classList.add('success');
+            console.log(message);
+        }
+
+        // Helper function to sleep between sending small chunks
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        async function startPrint() {
+            if (!navigator.bluetooth) {
+                log("Web Bluetooth is not supported on this browser or platform (e.g., iOS). Please use Chrome/Edge on Android or Desktop.", true);
+                return;
+            }
+
+            printBtn.disabled = true;
+            log("Searching for Bluetooth devices...");
+
+            try {
+                // 1. Request any device that advertises services, or matches common printer configurations
+                // Many generic POS printers use common serial port profiles or custom UUIDs.
+                // Using acceptAllDevices is easiest for manual testing.
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true,
+                    optionalServices: [
+                        '000018f0-0000-1000-8000-00805f9b34fb', // Common custom printer service
+                        '0000e0ff-0000-1000-8000-00805f9b34fb', // Another common printer service
+                        '49535343-fe7d-4ae5-8fa9-9fafd205e455'  // ISCC service
+                    ]
+                });
+
+                log(`Connecting to device: ${device.name || 'Unnamed Printer'}...`);
+                const server = await device.gatt.connect();
+
+                log("Discovering primary GATT services...");
+                const services = await server.getPrimaryServices();
+                
+                if (services.length === 0) {
+                    throw new Error("No GATT services found on this device.");
+                }
+
+                // Look for a characteristic we can write data to
+                let writeCharacteristic = null;
+                log("Scanning services for write characteristics...");
+                
+                for (const service of services) {
+                    const characteristics = await service.getCharacteristics();
+                    for (const char of characteristics) {
+                        if (char.properties.write || char.properties.writeWithoutResponse) {
+                            writeCharacteristic = char;
+                            break;
+                        }
+                    }
+                    if (writeCharacteristic) break;
+                }
+
+                if (!writeCharacteristic) {
+                    throw new Error("Could not find a writable Bluetooth characteristic on this device.");
+                }
+
+                log("Preparing ESC/POS printer payload...");
+                
+                // Encode structural ESC/POS commands
+                const encoder = new TextEncoder();
+                const escInit = new Uint8Array([0x1B, 0x40]); // Initialize printer (ESC @)
+                const textBytes = encoder.encode(receiptText.value);
+                const escCut = new Uint8Array([0x1D, 0x56, 0x41, 0x03]); // Paper Feed & Cut (GS V A)
+
+                // Combine into one large array
+                const payload = new Uint8Array(escInit.length + textBytes.length + escCut.length);
+                payload.set(escInit, 0);
+                payload.set(textBytes, escInit.length);
+                payload.set(escCut, escInit.length + textBytes.length);
+
+                log("Sending data to printer in 20-byte chunks...");
+                
+                // BLE requires splitting data into small packets (typically 20 bytes max)
+                const chunkSize = 20;
+                for (let i = 0; i < payload.length; i += chunkSize) {
+                    const chunk = payload.slice(i, i + chunkSize);
+                    await writeCharacteristic.writeValue(chunk);
+                    await sleep(30); // 30ms delay to prevent buffer crash
+                }
+
+                log("Print job sent successfully!", false, true);
+                
+                // Optional: clean disconnect
+                await device.gatt.disconnect();
+
+            } catch (error) {
+                log(`Error: ${error.message || error}`, true);
+            } finally {
+                printBtn.disabled = false;
+            }
+        }
+
+        printBtn.addEventListener('click', startPrint);
+    </script>
+</body>
+</html>
